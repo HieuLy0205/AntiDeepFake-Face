@@ -72,8 +72,9 @@ The concepts and ideas presented in the NullSwap paper serve as the primary rese
 - Compare original and protected images.
 - Evaluate image quality and processing performance.
 
-##Team Members
+## Team Members
 This project is developed by a team of six students:
+
 | Member | Responsibility|
 |----------|----------|
 | Member 1 | Project Leader & System Integration |
@@ -97,7 +98,7 @@ This project is developed by a team of six students:
 - Full reproduction of the original NullSwap framework.
 - Large-scale model training from scratch.
 
-##Expected Deliverables:
+## Expected Deliverables:
 Project documentation (Define & Design).
 Image processing modules.
 Face identity protection prototype.
@@ -115,7 +116,7 @@ Final project report.
 | Streamlit | Web application |
 | Matplotlib | Visualization |
 
-##System Architecture
+## System Architecture
 The proposed system consists of the following modules:
 ```text
 User Image
@@ -135,6 +136,6 @@ Evaluation
 Protected Image Output
 ```
 
-##Research Reference
+## Research Reference
 Wang et al., NullSwap: Proactive Identity Cloaking Against Deepfake Face Swapping, ICCV 2025.
 Research paper: https://arxiv.org/html/2503.18678v1
