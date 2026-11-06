@@ -1,6 +1,10 @@
 # AntiDeepFake-Face
-NullSwap-inspired Face Identity Protection using Image Processing and AI Integration
-Folder tree:
+
+NullSwap-inspired Face Identity Protection using Image Processing, Computer Vision and AI.
+
+## Folder Tree
+
+```text
 AntiDeepFake-Face/
 │
 ├── README.md
@@ -36,14 +40,17 @@ AntiDeepFake-Face/
 ├── notebooks/
 │
 └── project_management/
+```
 
-Folder rules:
-Thư mục	            Mục đích
-docs/	              Chứa Define, Design, nghiên cứu paper, kiểm thử và báo cáo
-src/	              Chứa code xử lý ảnh và thuật toán bảo vệ khuôn mặt
-app/	              Chứa giao diện Web App để demo sản phẩm
-models/	            Chứa model pretrained, cấu hình và hướng dẫn tải model
-data/	              Chứa ảnh mẫu phục vụ thử nghiệm
-tests/	            Kiểm thử từng module và toàn hệ thống
-notebooks/	        Thử nghiệm thuật toán trước khi đưa vào source code
-project_management/	Phân công, tiến độ và biên bản họp
+## Folder Rules
+
+| Folder | Purpose |
+|----------|----------|
+| `docs/` | Define, design, research papers, testing documents, and reports |
+| `src/` | Image processing, face detection, feature extraction, and identity protection algorithms |
+| `app/` | Web application for demonstrating the system |
+| `models/` | Pretrained models, checkpoints, and model configuration files |
+| `data/` | Sample datasets and testing images |
+| `tests/` | Unit tests and integration tests |
+| `notebooks/` | Experiments and algorithm prototyping |
+| `project_management/` | Task assignments, schedules, and meeting minutes |
