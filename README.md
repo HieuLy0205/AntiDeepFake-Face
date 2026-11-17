@@ -6,40 +6,34 @@ NullSwap-inspired Face Identity Protection using Image Processing, Computer Visi
 
 ```text
 AntiDeepFake-Face/
-│
 ├── README.md
 ├── .gitignore
 ├── requirements.txt
-│
+├── configs/              # Configuration parameters (k, N, thresholds, seed)
 ├── docs/
-│   ├── define/
-│   ├── design/
-│   ├── research/
+│   ├── requirements/     # Part I: Requirements Definition
+│   ├── design/           # Part II: System Design
+│   ├── research/         # Model and Dataset Survey
 │   └── report/
-│
 ├── src/
-│   ├── preprocessing/
+│   ├── video_io/         # Video input and frame extraction
 │   ├── face_detection/
-│   ├── feature_extraction/
-│   ├── protection/
+│   ├── anti_spoof/       # Phase 1: Anti-Spoofing Detection
+│   ├── deepfake/         # Phase 2: Deepfake Detection
+│   ├── decision/
 │   ├── evaluation/
-│   └── utils/
-│
+│   ├── utils/
+│   └── pipeline.py
 ├── app/
 │   ├── app.py
 │   ├── components/
 │   └── assets/
-│
-├── models/
-│
+├── models/              # Model weights (sources documented in README)
 ├── data/
-│   └── samples/
-│
-├── tests/
-│
-├── notebooks/
-│
-└── project_management/
+│   ├── raw/
+│   ├── test/            # Real, Printed, On-screen, Deepfake
+│   └── metadata.csv
+├── scripts/
 ```
 
 ## Folder Rules
@@ -77,34 +71,12 @@ This project is developed by a team of six students:
 
 | Member | Responsibility|
 |----------|----------|
-| Member 1 | Project Leader & System Integration |
-| Member 2 | Image Processing |
-| Member 3 | Face Detection |
-| Member 4 | Deep Learning & Feature Extraction|
-| Member 5 | Identity Protection |
-| Member 6 | Web Application, Evaluation & Testing |
-
-## Project Scope
-### In Scope
-- Static facial image processing.
-- Face detection and cropping.
-- Facial feature extraction.
-- Prototype identity protection.
-- Image comparison and evaluation.
-- Web-based demonstration.
-### Out of Scope
-- Real-time webcam processing.
-- Video DeepFake protection.
-- Full reproduction of the original NullSwap framework.
-- Large-scale model training from scratch.
-
-## Expected Deliverables:
-Project documentation (Define & Design).
-Image processing modules.
-Face identity protection prototype.
-Web application demonstration.
-Testing and evaluation results.
-Final project report.
+| Member 1 | System Integration |
+| Member 2 | Data & Evaluation |
+| Member 3 | Frame Extraction & Face Detection |
+| Member 4 | Anti-spoof (Printed, On-screen) |
+| Member 5 | Deepfake Detector |
+| Member 6 | UI/UX Designer, Tester & Report Writer |
 
 ##Technology Stack
 | Technology | Purpose |
@@ -119,21 +91,7 @@ Final project report.
 ## System Architecture
 The proposed system consists of the following modules:
 ```text
-User Image
-    ↓
-Web Interface
-    ↓
-Image Preprocessing
-    ↓
-Face Detection
-    ↓
-Feature Extraction
-    ↓
-Identity Protection
-    ↓
-Evaluation
-    ↓
-Protected Image Output
+
 ```
 
 ## Research Reference
