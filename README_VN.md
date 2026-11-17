@@ -6,41 +6,38 @@ Hệ thống bảo vệ danh tính khuôn mặt lấy cảm hứng từ NullSwap
 
 ```text
 AntiDeepFake-Face/
-│
 ├── README.md
 ├── .gitignore
 ├── requirements.txt
-│
+├── configs/              # tham số (k, N, ngưỡng, seed)
 ├── docs/
-│   ├── define/
-│   ├── design/
-│   ├── research/
+│   ├── define/           # Phần I
+│   ├── design/           # Phần II
+│   ├── research/         # khảo sát model và dataset
 │   └── report/
-│
 ├── src/
-│   ├── preprocessing/
+│   ├── video_io/         # đọc nguồn, lấy frame
 │   ├── face_detection/
-│   ├── feature_extraction/
-│   ├── protection/
+│   ├── anti_spoof/       # GĐ 1
+│   ├── deepfake/         # GĐ 2
+│   ├── decision/
 │   ├── evaluation/
-│   └── utils/
-│
+│   ├── utils/
+│   └── pipeline.py
 ├── app/
 │   ├── app.py
 │   ├── components/
 │   └── assets/
-│
-├── models/
-│
+├── models/               # trọng số, ghi nguồn trong README
 ├── data/
-│   └── samples/
-│
+│   ├── raw/
+│   ├── test/             # real, printed, onscreen, deepfake
+│   └── metadata.csv
+├── scripts/              # thu thập, chia tập, chạy thí nghiệm
+├── results/
 ├── tests/
-│
 ├── notebooks/
-│
-└── project_management/
-```
+└── project_management/```
 
 ## Quy tắc thư mục
 
@@ -75,28 +72,14 @@ Các ý tưởng và khái niệm được trình bày trong bài báo NullSwap 
 
 ## Thành viên nhóm
 Dự án được phát triển bởi nhóm gồm 06 sinh viên:
-| Thành viên | Nhiệm vụ |
+| ID | Nhiệm vụ |
 |----------|----------|
-| Thành viên 1 | Trưởng nhóm & Tích hợp hệ thống |
-| Thành viên 2 | Xử lý ảnh |
-| Thành viên 3 | Phát hiện khuôn mặt |
-| Thành viên 4 | Học sâu & Trích xuất đặc trưng |
-| Thành viên 5 | Bảo vệ danh tính |
-| Thành viên 6 | Ứng dụng Web, Đánh giá & Kiểm thử |
-
-## Phạm vi dự án
-### Trong phạm vi
-- Xử lý ảnh khuôn mặt tĩnh.
-- Phát hiện và cắt khuôn mặt.
-- Trích xuất đặc trưng khuôn mặt.
-- Xây dựng nguyên mẫu bảo vệ danh tính.
-- So sánh và đánh giá hình ảnh.
-- Minh họa hệ thống thông qua ứng dụng Web.
-### Ngoài phạm vi
-- Xử lý webcam theo thời gian thực.
-- Bảo vệ DeepFake trên video.
-- Tái hiện hoàn chỉnh framework NullSwap gốc.
-- Huấn luyện mô hình quy mô lớn từ đầu.
+| M1 | Tích hợp hệ thống |
+| M2 | Dữ liệu & Đánh giá |
+| M3 | Lấy frame & Phát hiện khuôn mặt |
+| M4 | Phát hiện chống giả mạo bằng ảnh in và màn hình |
+| M5 | Hệ thống phát hiện video/ảnh giả mạo bằng AI |
+| M6 | Thiết kế UI/UX, Kiểm thử và Báo cáo |
 
 ## Sản phẩm đầu ra mong đợi
 - Tài liệu dự án (Define & Design).
@@ -120,21 +103,7 @@ Dự án được phát triển bởi nhóm gồm 06 sinh viên:
 ## Kiến trúc hệ thống
 Hệ thống đề xuất bao gồm các mô-đun sau:
 ```text
-Ảnh đầu vào
-    ↓
-Giao diện Web
-    ↓
-Tiền xử lý ảnh
-    ↓
-Phát hiện khuôn mặt
-    ↓
-Trích xuất đặc trưng
-    ↓
-Bảo vệ danh tính
-    ↓
-Đánh giá
-    ↓
-Ảnh đầu ra đã được bảo vệ
+
 ```
 
 ## Tài liệu tham khảo
