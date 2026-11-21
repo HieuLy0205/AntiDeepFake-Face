@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-
-=======
 """Ứng dụng Web Streamlit phát hiện gian lận khuôn mặt — AntiDeepFake-Face (M6)."""
 
 import io
