@@ -8,10 +8,13 @@ import numpy as np
 from PIL import Image
 import streamlit as st
 
-# Đảm bảo import được `app.*` và `src.*` dù chạy streamlit từ thư mục nào
-_ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(_ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(_ROOT_DIR))
+# Đảm bảo import được package `app.*` và `src.*` khi chạy `streamlit run app/app.py`
+# (Streamlit tự thêm thư mục `app/` vào đầu sys.path khiến `app/app.py` che mất package `app`)
+_APP_DIR = str(Path(__file__).resolve().parent)
+_ROOT_DIR = str(Path(__file__).resolve().parents[1])
+sys.path = [_ROOT_DIR] + [p for p in sys.path if p not in (_ROOT_DIR, _APP_DIR)]
+if "app" in sys.modules and not hasattr(sys.modules["app"], "__path__"):
+    del sys.modules["app"]
 
 from app.components.constants import (  # noqa: E402
     ACADEMIC_LIMITATION_BANNER,
@@ -145,6 +148,13 @@ def _render_results(
                 confidence=result.confidence,
             )
             st.image(annotated, caption="Khung hình đại diện kèm bounding box", use_container_width=True)
+            if result.preview_face_crop_rgb is not None:
+                with st.expander("Xem ảnh khuôn mặt đã cắt chuẩn M3 (224×224 RGB uint8)", expanded=False):
+                    st.image(
+                        result.preview_face_crop_rgb,
+                        caption=f"FaceCropResult.face_rgb — shape {result.preview_face_crop_rgb.shape}, dtype {result.preview_face_crop_rgb.dtype}",
+                        width=224,
+                    )
         else:
             st.info("Không có khung hình đại diện để hiển thị.")
 
@@ -468,4 +478,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
->>>>>>> M6
