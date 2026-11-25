@@ -1,52 +1,117 @@
-"""Unit test cho module src/video_io (M3) theo Mục II.4 & II.7."""
-
+import os
+import tempfile
+import cv2
+import numpy as np
 import pytest
 
-
-def test_load_frames_corrupt_file_raises_invalid_input(temp_corrupt_file_path):
-    """Tệp hỏng hoặc không đọc được phải ném InvalidInputError."""
-    reader = pytest.importorskip("src.video_io.reader")
-    video_io_pkg = pytest.importorskip("src.video_io")
-    invalid_err = getattr(reader, "InvalidInputError", getattr(video_io_pkg, "InvalidInputError", ValueError))
-
-    with pytest.raises(invalid_err):
-        reader.load_frames(str(temp_corrupt_file_path), sample_fps=5, max_frames=30)
+from src.schemas import FramePacket
+from src.video_io.reader import (
+    InvalidInputError,
+    SlidingFrameBuffer,
+    load_frames,
+    load_single_frame,
+)
 
 
-def test_load_frames_missing_file_raises_invalid_input(tmp_path):
-    """Đường dẫn không tồn tại phải ném InvalidInputError."""
-    reader = pytest.importorskip("src.video_io.reader")
-    video_io_pkg = pytest.importorskip("src.video_io")
-    invalid_err = getattr(reader, "InvalidInputError", getattr(video_io_pkg, "InvalidInputError", ValueError))
-
-    with pytest.raises(invalid_err):
-        reader.load_frames(str(tmp_path / "does_not_exist.mp4"), sample_fps=5, max_frames=30)
+def test_load_frames_non_existent_file():
+    with pytest.raises(InvalidInputError):
+        load_frames("non_existent_file_path_12345.mp4")
 
 
-def test_load_frames_image_returns_single_rgb_uint8_packet(temp_valid_image_path):
-    """Đầu vào ảnh trả đúng 1 FramePacket có hệ màu RGB và dtype uint8."""
-    np = pytest.importorskip("numpy")
-    reader = pytest.importorskip("src.video_io.reader")
-    schemas = pytest.importorskip("src.schemas")
-
-    packets = reader.load_frames(str(temp_valid_image_path), sample_fps=5, max_frames=30)
-    assert len(packets) == 1
-    pkt = packets[0]
-    assert isinstance(pkt, schemas.FramePacket)
-    assert pkt.frame_id == 0
-    assert pkt.image_rgb.dtype == np.uint8
-    assert pkt.image_rgb.ndim == 3 and pkt.image_rgb.shape[2] == 3
+def test_load_frames_corrupted_file():
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        f.write(b"corrupted video content that opencv cannot open")
+        temp_path = f.name
+    try:
+        with pytest.raises(InvalidInputError):
+            load_frames(temp_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
-def test_load_frames_short_video_respects_sample_fps_and_max_frames(temp_short_video_path):
-    """Video ngắn (2s @ 10fps) lấy mẫu tại 5fps phải trả <= max_frames và <= ~10 frames."""
-    np = pytest.importorskip("numpy")
-    reader = pytest.importorskip("src.video_io.reader")
+def test_load_frames_invalid_sampling_params(temp_valid_image_path):
+    with pytest.raises(InvalidInputError):
+        load_frames(str(temp_valid_image_path), sample_fps=0, max_frames=10)
+    with pytest.raises(InvalidInputError):
+        load_frames(str(temp_valid_image_path), sample_fps=5, max_frames=0)
 
-    video_path, _fps, _total = temp_short_video_path
-    packets = reader.load_frames(str(video_path), sample_fps=5, max_frames=6)
 
-    assert 1 <= len(packets) <= 6
-    for pkt in packets:
+def test_load_frames_static_image():
+    # Tạo ảnh có góc trên bên trái màu Đỏ thuần túy theo RGB: [255, 0, 0]
+    # Lưu bằng cv2 (BGR) thì phải lưu là [0, 0, 255]
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        img_bgr = np.zeros((100, 100, 3), dtype=np.uint8)
+        img_bgr[:, :] = [0, 0, 255]  # Đỏ trong BGR
+        cv2.imwrite(f.name, img_bgr)
+        temp_path = f.name
+
+    try:
+        packets = load_frames(temp_path)
+        assert len(packets) == 1
+        pkt = packets[0]
+        assert isinstance(pkt, FramePacket)
+        assert pkt.frame_id == 0
+        assert pkt.timestamp_sec == 0.0
+        assert pkt.image_rgb.shape == (100, 100, 3)
         assert pkt.image_rgb.dtype == np.uint8
-        assert pkt.image_rgb.ndim == 3 and pkt.image_rgb.shape[2] == 3
+        # Kiểm tra màu đã chuyển đúng sang RGB: pixel phải là [255, 0, 0]
+        assert np.array_equal(pkt.image_rgb[0, 0], [255, 0, 0]), "Lỗi: Ảnh chưa được chuyển sang hệ màu RGB!"
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def test_load_frames_synthetic_video():
+    # Tạo video ngắn: 30 FPS, độ dài 30 frames (1 giây)
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        temp_path = f.name
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(temp_path, fourcc, 30.0, (120, 120))
+    for i in range(30):
+        frame = np.full((120, 120, 3), i * 8, dtype=np.uint8)
+        out.write(frame)
+    out.release()
+
+    try:
+        # Lấy mẫu với sample_fps = 5, tối đa 10 frames
+        # Với 30 FPS và sample_fps = 5, step = 30 / 5 = 6 frames -> 5 frames
+        packets = load_frames(temp_path, sample_fps=5, max_frames=10)
+        assert len(packets) == 5
+        assert packets[0].frame_id == 0
+        assert packets[1].frame_id == 1
+        assert packets[0].image_rgb.shape == (120, 120, 3)
+        assert packets[0].image_rgb.dtype == np.uint8
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def test_load_single_frame():
+    img_rgb = np.full((200, 200, 3), 128, dtype=np.uint8)
+    pkt = load_single_frame(img_rgb, frame_id=99)
+    assert isinstance(pkt, FramePacket)
+    assert pkt.frame_id == 99
+    assert pkt.image_rgb.shape == (200, 200, 3)
+    assert pkt.image_rgb.dtype == np.uint8
+
+
+def test_sliding_frame_buffer():
+    buf = SlidingFrameBuffer(max_frames=3)
+    for i in range(5):
+        pkt = FramePacket(
+            frame_id=i,
+            timestamp_sec=float(i) * 0.2,
+            image_rgb=np.full((64, 64, 3), i, dtype=np.uint8),
+        )
+        buf.push(pkt)
+
+    assert len(buf) == 3
+    frames = buf.get_frames()
+    assert [f.frame_id for f in frames] == [2, 3, 4]
+    buf.clear()
+    assert len(buf) == 0
+
+    with pytest.raises(InvalidInputError):
+        SlidingFrameBuffer(max_frames=0)

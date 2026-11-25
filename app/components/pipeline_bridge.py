@@ -46,6 +46,7 @@ class PipelineExecutionResult:
     frame_logs: List[dict] = field(default_factory=list)
     preview_frame_rgb: Optional[np.ndarray] = None
     preview_bbox: Optional[Tuple[int, int, int, int]] = None
+    preview_face_crop_rgb: Optional[np.ndarray] = None
     elapsed_sec: float = 0.0
     is_mock_preview: bool = False
     error_message: Optional[str] = None
@@ -178,6 +179,7 @@ def run_backend_pipeline(
         frame_logs=list(getattr(decision, "frame_logs", []) or []),
         preview_frame_rgb=preview_rgb,
         preview_bbox=bbox,
+        preview_face_crop_rgb=getattr(decision, "preview_face_crop_rgb", None),
         elapsed_sec=elapsed,
         is_mock_preview=False,
     )
