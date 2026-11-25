@@ -304,6 +304,19 @@ def main() -> None:
             value=True,
             help="Bật để phân tích thêm dấu hiệu khuôn mặt bị hoán đổi hoặc tạo bằng AI.",
         )
+        variant_label_map = {
+            "SigLIP2 Fine-tuned (Chuẩn — AUC 0.966)": "siglip2",
+            "Ensemble SigLIP2 + ViT (Acc 92.0%)": "ensemble",
+            "EfficientNet-B0 (Siêu nhanh CPU ~25 FPS)": "efficientnet_b0",
+            "ViT-Base Fine-tuned (AUC 0.928)": "vit",
+        }
+        selected_variant_label = st.selectbox(
+            "Mô hình Deepfake (GĐ 2 — M5)",
+            options=list(variant_label_map.keys()),
+            index=0,
+            disabled=not enable_deepfake,
+        )
+        deepfake_variant = variant_label_map[selected_variant_label]
         tau_deepfake = st.slider(
             "Ngưỡng phát hiện Deepfake",
             min_value=0.10,
@@ -333,6 +346,7 @@ def main() -> None:
         tau_deepfake=tau_deepfake,
         uncertain_margin=uncertain_margin,
         enable_deepfake=enable_deepfake,
+        deepfake_variant=deepfake_variant,
     )
 
     result: Optional[PipelineExecutionResult] = None
@@ -427,16 +441,24 @@ def main() -> None:
                     st.rerun()
 
                 if run_clicked:
-                    with st.spinner("Đang phân tích ảnh webcam..."):
-                        result = _execute_file_analysis(
-                            raw_bytes=raw_bytes,
-                            suffix=".jpg",
-                            config=config,
-                            fallback_frame_rgb=rgb_cam,
-                            backend_available=backend_available,
-                            allow_ui_preview=allow_ui_preview,
-                            is_video=False,
-                        )
+                    with st.spinner("Đang phân tích bộ đệm khung hình webcam..."):
+                        buffered_frames = buffer.get_frames()[-n_frames:]
+                        if backend_available and buffered_frames:
+                            result = run_backend_pipeline(
+                                buffered_frames,
+                                config,
+                                fallback_frame_rgb=buffered_frames[-1],
+                            )
+                        else:
+                            result = _execute_file_analysis(
+                                raw_bytes=raw_bytes,
+                                suffix=".jpg",
+                                config=config,
+                                fallback_frame_rgb=rgb_cam,
+                                backend_available=backend_available,
+                                allow_ui_preview=allow_ui_preview,
+                                is_video=False,
+                            )
         else:
             device_id = int(st.number_input("Webcam Device ID", min_value=0, max_value=5, value=0, step=1))
             if st.button("Phân tích", type="primary"):
@@ -468,4 +490,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
->>>>>>> M6
+

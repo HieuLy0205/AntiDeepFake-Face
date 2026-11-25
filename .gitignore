@@ -218,3 +218,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local datasets & large model weights (do not push raw data/weights to GitHub)
+.DS_Store
+dataset_RTFS_800_Subset/
+chẹckpoint/
+data/cache/
+models/hf_cache/
+models/minifasnet_onnx/
+models/*.pt
+models/*.pth
+models/*.ckpt
+models/*.bin
+models/*.onnx
+models/*.safetensors
+
