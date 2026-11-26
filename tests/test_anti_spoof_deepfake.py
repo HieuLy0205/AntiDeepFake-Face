@@ -26,7 +26,7 @@ def test_predict_spoof_returns_three_normalized_probabilities(sample_face_crop_2
     assert math.isclose(sum(score.probs.values()), 1.0, rel_tol=1e-3, abs_tol=1e-3)
 
 
-def test_predict_deepfake_returns_valid_probability(sample_face_crop_224):
+def test_predict_deepfake_returns_valid_probability(sample_face_crop_224, monkeypatch):
     """DeepfakeScore.fake_prob phải nằm trong [0.0, 1.0]."""
     schemas = pytest.importorskip("src.schemas")
     deepfake = pytest.importorskip("src.deepfake.predictor")
@@ -38,6 +38,14 @@ def test_predict_deepfake_returns_valid_probability(sample_face_crop_224):
         det_confidence=0.99,
         face_rgb=sample_face_crop_224,
     )
+    class StubDetector:
+        def predict(self, face_crop):
+            return schemas.DeepfakeScore(
+                frame_id=face_crop.frame_id,
+                fake_prob=0.4,
+            )
+
+    monkeypatch.setattr(deepfake, "get_default_detector", lambda: StubDetector())
     score = deepfake.predict_deepfake(crop)
 
     assert isinstance(score, schemas.DeepfakeScore)

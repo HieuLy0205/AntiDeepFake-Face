@@ -2,6 +2,20 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
+LABEL_REAL = "Real"
+LABEL_PRINTED = "Printed"
+LABEL_ONSCREEN = "On-screen"
+LABEL_DEEPFAKE = "Deepfake"
+LABEL_NO_FACE = "No_Face"
+
+VALID_FINAL_LABELS: Tuple[str, ...] = (
+    LABEL_REAL,
+    LABEL_PRINTED,
+    LABEL_ONSCREEN,
+    LABEL_DEEPFAKE,
+    LABEL_NO_FACE,
+)
+
 # 1. Đầu ra của video_io (M3)
 @dataclass
 class FramePacket:
@@ -17,6 +31,7 @@ class FaceCropResult:
     bbox: Optional[Tuple[int, int, int, int]] = None  # (x1, y1, x2, y2) trên ảnh gốc
     det_confidence: float = 0.0
     face_rgb: Optional[np.ndarray] = None  # Bắt buộc: shape (224, 224, 3), dtype uint8, hệ RGB
+    face_count: int = 0
 
 # 3. Đầu ra của anti_spoof (M4)
 @dataclass
@@ -40,3 +55,6 @@ class FinalDecision:
     aggregated_probs: Dict[str, float]  # Xác suất trung bình 4 lớp sau khi gộp N frame
     reason: str  # Giải thích ngắn gọn (VD: "Vuot nguong Printed (0.85 > 0.60)")
     frame_logs: List[dict] = field(default_factory=list)  # Lưu log từng frame cho M6
+    preview_frame_rgb: Optional[np.ndarray] = None
+    preview_bbox: Optional[Tuple[int, int, int, int]] = None
+    preview_face_crop_rgb: Optional[np.ndarray] = None

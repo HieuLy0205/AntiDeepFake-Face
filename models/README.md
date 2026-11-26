@@ -63,3 +63,12 @@ Kiểm thử trên CPU với ba ảnh mẫu từ Silent-Face-Anti-Spoofing.
 - Chưa kiểm thử với ảnh tự chuẩn bị và đầu ra thực tế của M3.
 - Chất lượng dự đoán phụ thuộc vào vùng crop khuôn mặt và điều kiện ảnh đầu vào.
 - Level 1 chỉ phân biệt Real và Spoof. Việc phân biệt Printed và On-screen do Level 2 đảm nhiệm.
+
+## Deepfake detector (M5)
+
+- API tích hợp: `src.deepfake.predictor.predict_deepfake(face_crop)`.
+- Mô hình pretrained mặc định: `king1oo1/deepfake-model`.
+- Trọng số fine-tuned tùy chọn: `models/m5_rtfs_siglip2_adapter.pt`.
+- Tải mô hình nền bằng `python scripts/download_m5_models.py`.
+- Các checkpoint fine-tuned không được commit lên Git; đặt chúng trong `models/` cục bộ.
+- Kết quả đánh giá và benchmark nằm trong `results/`; chỉ dùng số liệu đã xác minh từ các lần chạy tương ứng.

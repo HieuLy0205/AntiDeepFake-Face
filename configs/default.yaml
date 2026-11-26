@@ -1,0 +1,27 @@
+# Default AntiDeepFake-Face Pipeline Configuration
+seed: 42
+sample_fps: 5
+max_frames: 10
+enable_deepfake: true
+deepfake_variant: siglip2  # siglip2 | ensemble | efficientnet_b0 | vit
+
+thresholds:
+  tau_spoof: 0.60
+  tau_deepfake: 0.65
+  uncertain_margin: 0.08
+
+models:
+  face_detection:
+    backend: mtcnn
+    target_size: [224, 224]
+    margin_ratio: 0.25
+  anti_spoof:
+    backend: minifasnet_v2_onnx
+    onnx_path: models/minifasnet_onnx/minifasnet_v2.onnx
+    context_scale: 2.7
+  deepfake:
+    primary_model_id: king1oo1/deepfake-model
+    primary_adapter: models/m5_rtfs_siglip2_adapter.pt
+    secondary_model_id: prithivMLmods/Deep-Fake-Detector-v2-Model
+    secondary_adapter: models/m5_rtfs_vit_adapter.pt
+    lightweight_cnn: models/m5_rtfs_efficientnet_b0.pt

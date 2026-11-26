@@ -47,11 +47,22 @@ def test_run_pipeline_on_short_video_stage1_and_stage2(temp_short_video_path):
         assert isinstance(decision.reason, str)
 
 
-def test_run_pipeline_and_bridge_on_real_face_fixture():
+def test_run_pipeline_and_bridge_on_real_face_fixture(monkeypatch):
     """Chạy qua pipeline_bridge trên ảnh khuôn mặt thật `sample_face.jpg` và xác nhận preview + crop M3."""
     assert FIXTURE_FACE.exists(), "Thiếu fixture tests/fixtures/sample_face.jpg"
     config = build_pipeline_config(sample_fps=5, max_frames=10, enable_deepfake=True)
 
+    original_loader = pipeline._load_optional_callable
+
+    def load_with_stubbed_deepfake(module_path, attr_name):
+        if module_path == "src.deepfake.predictor" and attr_name == "predict_deepfake":
+            return lambda crop: schemas.DeepfakeScore(
+                frame_id=crop.frame_id,
+                fake_prob=0.0,
+            )
+        return original_loader(module_path, attr_name)
+
+    monkeypatch.setattr(pipeline, "_load_optional_callable", load_with_stubbed_deepfake)
     res = run_backend_pipeline(str(FIXTURE_FACE), config)
     assert res.error_message is None
     assert res.is_mock_preview is False

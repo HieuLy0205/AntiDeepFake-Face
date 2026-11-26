@@ -146,6 +146,9 @@ def run_pipeline(source: Union[str, int], config: Optional[dict] = None) -> Fina
             spoof_scores,
             df_scores if (enable_deepfake and predict_deepfake_fn is not None) else None,
             thresholds,
+            frame_logs=frame_logs,
+            preview_frame_rgb=preview_frame_rgb,
+            preview_bbox=preview_bbox,
         )
         if not getattr(decision, "frame_logs", None):
             decision.frame_logs = frame_logs

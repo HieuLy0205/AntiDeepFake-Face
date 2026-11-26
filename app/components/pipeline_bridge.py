@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from app.components.constants import (
@@ -59,12 +59,14 @@ def build_pipeline_config(
     tau_deepfake: float = DEFAULT_TAU_DEEPFAKE,
     uncertain_margin: float = DEFAULT_UNCERTAIN_MARGIN,
     enable_deepfake: bool = True,
+    deepfake_variant: str = "siglip2",
 ) -> Dict[str, Any]:
     """Tạo dict config đồng bộ cho `src.pipeline.run_pipeline(source, config)`."""
     return {
         "sample_fps": int(sample_fps),
         "max_frames": int(max_frames),
         "enable_deepfake": bool(enable_deepfake),
+        "deepfake_variant": str(deepfake_variant),
         "thresholds": {
             "tau_spoof": float(tau_spoof),
             "tau_deepfake": float(tau_deepfake),
@@ -134,7 +136,7 @@ def _extract_preview_from_decision(
 
 
 def run_backend_pipeline(
-    source: Union[str, int],
+    source: Union[str, int, Sequence[np.ndarray]],
     config: Dict[str, Any],
     fallback_frame_rgb: Optional[np.ndarray] = None,
 ) -> PipelineExecutionResult:

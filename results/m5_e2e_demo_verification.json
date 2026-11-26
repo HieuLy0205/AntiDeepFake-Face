@@ -1,0 +1,159 @@
+{
+  "module_audit": {
+    "M3_video_io": {
+      "ready": false,
+      "detail": "ModuleNotFoundError: No module named 'src.video_io.reader'"
+    },
+    "M3_face_detection": {
+      "ready": false,
+      "detail": "ModuleNotFoundError: No module named 'src.face_detection.detector'"
+    },
+    "M4_anti_spoof": {
+      "ready": false,
+      "detail": "ModuleNotFoundError: No module named 'src.anti_spoof.predictor'"
+    },
+    "M5_deepfake": {
+      "ready": true,
+      "detail": "src.deepfake.predictor.predict_deepfake OK"
+    },
+    "M1_decision": {
+      "ready": false,
+      "detail": "ModuleNotFoundError: No module named 'src.decision.aggregator'"
+    },
+    "M1_pipeline": {
+      "ready": false,
+      "detail": "Missing src.pipeline.run_pipeline"
+    },
+    "M6_streamlit_app": {
+      "ready": false,
+      "detail": "  File \"/Users/lethanh/AntiDeepFake-Face/app/app.py\", line 471\n    >>>>>>> M6\n    ^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  "cpu_benchmarks": {
+    "finetuned_siglip2": {
+      "batch1_ms": 110.63,
+      "batch1_fps": 9.04,
+      "batch10_total_ms": 688.34,
+      "batch10_ms_per_frame": 68.83,
+      "batch10_fps": 14.53
+    },
+    "finetuned_vit": {
+      "batch1_ms": 76.42,
+      "batch1_fps": 13.09,
+      "batch10_total_ms": 565.44,
+      "batch10_ms_per_frame": 56.54,
+      "batch10_fps": 17.69
+    },
+    "finetuned_efficientnet_b0": {
+      "batch1_ms": 118.77,
+      "batch1_fps": 8.42,
+      "batch10_total_ms": 416.8,
+      "batch10_ms_per_frame": 41.68,
+      "batch10_fps": 23.99
+    },
+    "finetuned_ensemble_50_50": {
+      "batch1_ms": 165.24,
+      "batch1_fps": 6.05,
+      "batch10_total_ms": 1225.31,
+      "batch10_ms_per_frame": 122.53,
+      "batch10_fps": 8.16
+    }
+  },
+  "e2e_test_videos": [
+    {
+      "scenario": "Real (original)",
+      "sample_id": "rtfs_original_0006",
+      "true_label": "Real",
+      "pred_label_siglip2": "Real",
+      "correct": true,
+      "siglip2_fake_prob": 0.3582,
+      "cnn_fake_prob": 0.2888,
+      "ensemble_fake_prob": 0.5608,
+      "n_frames": 10,
+      "ms_video_io": 125.5,
+      "ms_face_det": 279.2,
+      "ms_m5_deepfake": 633.0,
+      "ms_ui_render": 40.5,
+      "total_sec": 1.08,
+      "effective_e2e_fps": 9.27,
+      "warnings": [],
+      "timeline_len": 10
+    },
+    {
+      "scenario": "InSwapper (no enhancer)",
+      "sample_id": "rtfs_inswapper_0002",
+      "true_label": "Deepfake",
+      "pred_label_siglip2": "Deepfake",
+      "correct": true,
+      "siglip2_fake_prob": 0.7886,
+      "cnn_fake_prob": 0.9972,
+      "ensemble_fake_prob": 0.8695,
+      "n_frames": 10,
+      "ms_video_io": 30.2,
+      "ms_face_det": 167.9,
+      "ms_m5_deepfake": 643.2,
+      "ms_ui_render": 4.4,
+      "total_sec": 0.85,
+      "effective_e2e_fps": 11.82,
+      "warnings": [],
+      "timeline_len": 10
+    },
+    {
+      "scenario": "InSwapper (+faceenchancer)",
+      "sample_id": "rtfs_inswapper_0005",
+      "true_label": "Deepfake",
+      "pred_label_siglip2": "Deepfake",
+      "correct": true,
+      "siglip2_fake_prob": 0.8884,
+      "cnn_fake_prob": 0.8446,
+      "ensemble_fake_prob": 0.9144,
+      "n_frames": 10,
+      "ms_video_io": 27.4,
+      "ms_face_det": 158.9,
+      "ms_m5_deepfake": 646.8,
+      "ms_ui_render": 3.4,
+      "total_sec": 0.84,
+      "effective_e2e_fps": 11.95,
+      "warnings": [],
+      "timeline_len": 10
+    },
+    {
+      "scenario": "UniFace (no enhancer)",
+      "sample_id": "rtfs_uniface_0001",
+      "true_label": "Deepfake",
+      "pred_label_siglip2": "Deepfake",
+      "correct": true,
+      "siglip2_fake_prob": 0.9721,
+      "cnn_fake_prob": 0.9747,
+      "ensemble_fake_prob": 0.9592,
+      "n_frames": 10,
+      "ms_video_io": 68.8,
+      "ms_face_det": 166.7,
+      "ms_m5_deepfake": 632.9,
+      "ms_ui_render": 9.3,
+      "total_sec": 0.88,
+      "effective_e2e_fps": 11.39,
+      "warnings": [],
+      "timeline_len": 10
+    },
+    {
+      "scenario": "UniFace (+faceenchancer)",
+      "sample_id": "rtfs_uniface_0026",
+      "true_label": "Deepfake",
+      "pred_label_siglip2": "Deepfake",
+      "correct": true,
+      "siglip2_fake_prob": 0.9795,
+      "cnn_fake_prob": 0.9666,
+      "ensemble_fake_prob": 0.9623,
+      "n_frames": 10,
+      "ms_video_io": 125.6,
+      "ms_face_det": 185.9,
+      "ms_m5_deepfake": 626.6,
+      "ms_ui_render": 8.7,
+      "total_sec": 0.95,
+      "effective_e2e_fps": 10.56,
+      "warnings": [],
+      "timeline_len": 10
+    }
+  ]
+}
