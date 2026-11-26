@@ -1,11 +1,13 @@
 """Công cụ vẽ bounding box, định dạng dòng thời gian và cảnh báo ngưỡng cho M6."""
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from app.components.constants import (
     AGGREGATED_CLASSES,
     LABEL_BADGE_COLORS,
+    LABEL_DISPLAY_VI,
     LABEL_NO_FACE,
     LABEL_ONSCREEN,
     LABEL_PRINTED,
@@ -31,20 +33,22 @@ def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     return tuple(int(cleaned[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore
 
 
-def draw_face_annotation(
-    frame_rgb: np.ndarray,
-    bbox: Optional[Tuple[int, int, int, int]],
+_HUD_RGB_COLORS: Dict[str, Tuple[int, int, int]] = {
+    LABEL_REAL: (16, 185, 129),
+    LABEL_PRINTED: (245, 158, 11),
+    LABEL_ONSCREEN: (249, 115, 22),
+    LABEL_DEEPFAKE: (239, 68, 68),
+    LABEL_NO_FACE: (148, 163, 184),
+}
+
+
+def _draw_single_hud_box(
+    annotated: np.ndarray,
+    bbox: Tuple[int, int, int, int],
     label: str,
-    confidence: float,
-) -> np.ndarray:
-    """Vẽ bounding box (x1, y1, x2, y2) và nhãn lên ảnh RGB uint8 (không đổi hệ màu)."""
-    if frame_rgb is None or frame_rgb.ndim != 3:
-        raise ValueError("frame_rgb phải là mảng numpy 3 chiều (H, W, 3) hệ RGB.")
-
-    annotated = np.array(frame_rgb, dtype=np.uint8, copy=True)
-    if bbox is None:
-        return annotated
-
+    caption: str,
+) -> None:
+    """Vẽ một khung biometric HUD + nhãn lên ảnh `annotated` tại chỗ."""
     h, w = annotated.shape[:2]
     x1, y1, x2, y2 = [int(v) for v in bbox]
     x1 = max(0, min(x1, w - 1))
@@ -52,31 +56,60 @@ def draw_face_annotation(
     x2 = max(x1 + 1, min(x2, w))
     y2 = max(y1 + 1, min(y2, h))
 
-    color_rgb = _hex_to_rgb(LABEL_BADGE_COLORS.get(label, "#0f172a"))
-    caption = f"{label} ({confidence * 100:.1f}%)"
+    color_rgb = _HUD_RGB_COLORS.get(label) or _hex_to_rgb(LABEL_BADGE_COLORS.get(label, "#0f172a"))
 
     if cv2 is not None:
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), color_rgb, 2)
-        (tw, th), _ = cv2.getTextSize(caption, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
-        text_y = max(y1 - 8, th + 6)
-        cv2.rectangle(
-            annotated,
-            (x1, max(0, text_y - th - 6)),
-            (min(w, x1 + tw + 10), text_y + 2),
-            color_rgb,
-            -1,
-        )
-        cv2.putText(
-            annotated,
-            caption,
-            (x1 + 5, text_y - 3),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-        return annotated
+        bw = x2 - x1
+        bh = y2 - y1
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color_rgb, 1, cv2.LINE_AA)
+        corner_len = max(6, min(bw, bh) // 4)
+        corner_len_x = min(corner_len, max(4, bw // 2))
+        corner_len_y = min(corner_len, max(4, bh // 2))
+        thickness = 1 if bw < 55 else max(2, min(w, h) // 180)
+
+        cv2.line(annotated, (x1, y1), (x1 + corner_len_x, y1), color_rgb, thickness, cv2.LINE_AA)
+        cv2.line(annotated, (x1, y1), (x1, y1 + corner_len_y), color_rgb, thickness, cv2.LINE_AA)
+        cv2.line(annotated, (x2, y1), (x2 - corner_len_x, y1), color_rgb, thickness, cv2.LINE_AA)
+        cv2.line(annotated, (x2, y1), (x2, y1 + corner_len_y), color_rgb, thickness, cv2.LINE_AA)
+        cv2.line(annotated, (x1, y2), (x1 + corner_len_x, y2), color_rgb, thickness, cv2.LINE_AA)
+        cv2.line(annotated, (x1, y2), (x1, y2 - corner_len_y), color_rgb, thickness, cv2.LINE_AA)
+        cv2.line(annotated, (x2, y2), (x2 - corner_len_x, y2), color_rgb, thickness, cv2.LINE_AA)
+        cv2.line(annotated, (x2, y2), (x2, y2 - corner_len_y), color_rgb, thickness, cv2.LINE_AA)
+
+        font_scale = max(0.35, min(0.60, bw / 190.0))
+        text_thick = 1
+        (tw, th), baseline = cv2.getTextSize(caption, cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_thick)
+        pad_x = 4 if bw < 65 else 7
+        pad_y = 3 if bw < 65 else 5
+        bar_w = 3 if bw < 65 else 5
+        banner_h = th + pad_y * 2 + baseline
+        banner_w = min(w - x1, tw + pad_x * 2 + bar_w)
+        if y1 >= banner_h + 4:
+            by1 = y1 - banner_h - 4
+            by2 = y1 - 4
+        else:
+            by1 = min(h - banner_h, y1 + 2)
+            by2 = min(h, by1 + banner_h)
+        bx1 = x1
+        bx2 = min(w, x1 + max(banner_w, bar_w + 12))
+
+        if bx2 > bx1 and by2 > by1:
+            roi = annotated[by1:by2, bx1:bx2]
+            dark_bg = np.full_like(roi, (11, 17, 32), dtype=np.uint8)
+            blended = cv2.addWeighted(dark_bg, 0.78, roi, 0.22, 0.0)
+            annotated[by1:by2, bx1:bx2] = blended
+            cv2.rectangle(annotated, (bx1, by1), (min(bx2, bx1 + bar_w), by2), color_rgb, -1)
+            cv2.putText(
+                annotated,
+                caption,
+                (bx1 + bar_w + pad_x, by2 - pad_y - baseline // 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (248, 250, 252),
+                text_thick,
+                cv2.LINE_AA,
+            )
+        return
 
     if Image is not None and ImageDraw is not None:
         pil_img = Image.fromarray(annotated, mode="RGB")
@@ -85,8 +118,64 @@ def draw_face_annotation(
         text_y = max(0, y1 - 18)
         draw.rectangle([x1, text_y, min(w, x1 + len(caption) * 7 + 8), text_y + 18], fill=color_rgb)
         draw.text((x1 + 4, text_y + 3), caption, fill=(255, 255, 255))
-        return np.asarray(pil_img, dtype=np.uint8)
+        annotated[:] = np.asarray(pil_img, dtype=np.uint8)
 
+
+def draw_face_annotation(
+    frame_rgb: np.ndarray,
+    bbox: Optional[Tuple[int, int, int, int]],
+    label: str,
+    confidence: float,
+) -> np.ndarray:
+    """Vẽ bounding box kiểu biometric HUD (x1, y1, x2, y2) và nhãn lên ảnh RGB uint8."""
+    if frame_rgb is None or frame_rgb.ndim != 3:
+        raise ValueError("frame_rgb phải là mảng numpy 3 chiều (H, W, 3) hệ RGB.")
+
+    annotated = np.array(frame_rgb, dtype=np.uint8, copy=True)
+    if bbox is None:
+        return annotated
+
+    _draw_single_hud_box(annotated, bbox, label, f"{label} | {confidence * 100:.1f}%")
+    return annotated
+
+
+def draw_multi_face_annotations(
+    frame_rgb: np.ndarray,
+    faces: Sequence[Dict[str, Any]],
+    fallback_bbox: Optional[Tuple[int, int, int, int]] = None,
+    fallback_label: str = LABEL_REAL,
+    fallback_confidence: float = 0.0,
+) -> np.ndarray:
+    """Vẽ bounding box HUD và nhãn cho toàn bộ khuôn mặt xuất hiện trong một khung cảnh."""
+    if frame_rgb is None or frame_rgb.ndim != 3:
+        raise ValueError("frame_rgb phải là mảng numpy 3 chiều (H, W, 3) hệ RGB.")
+
+    annotated = np.array(frame_rgb, dtype=np.uint8, copy=True)
+    valid_faces = [f for f in faces if isinstance(f, dict) and f.get("bbox") is not None]
+    if not valid_faces:
+        if fallback_bbox is not None:
+            _draw_single_hud_box(
+                annotated,
+                fallback_bbox,
+                fallback_label,
+                f"{fallback_label} | {fallback_confidence * 100:.1f}%",
+            )
+        return annotated
+
+    multi = len(valid_faces) > 1
+    for idx, face in enumerate(valid_faces, start=1):
+        bbox = tuple(int(v) for v in face["bbox"])
+        lbl = str(face.get("label", LABEL_REAL))
+        conf = float(face.get("confidence", 0.0))
+        face_num = int(face.get("face_index", idx))
+        bw = bbox[2] - bbox[0]
+        if multi and bw < 70:
+            caption = f"#{face_num} {lbl} {conf * 100:.0f}%"
+        elif multi:
+            caption = f"#{face_num} {lbl} | {conf * 100:.1f}%"
+        else:
+            caption = f"{lbl} | {conf * 100:.1f}%"
+        _draw_single_hud_box(annotated, bbox, lbl, caption)  # type: ignore[arg-type]
     return annotated
 
 
@@ -196,6 +285,7 @@ def build_frame_timeline_rows(frame_logs: Sequence[dict]) -> List[Dict[str, Any]
                 "Deepfake": round(float(fake_p), 4) if fake_p is not None else None,
                 "latency_ms": round(latency_ms, 2),
                 "has_face": bool(log.get("has_face", label != LABEL_NO_FACE)),
+                "face_count": int(log.get("face_count", 1 if log.get("has_face", label != LABEL_NO_FACE) else 0)),
             }
         )
     return rows
@@ -221,4 +311,61 @@ def compute_performance_stats(
         "total_elapsed_sec": round(total_elapsed_sec, 3),
         "effective_fps": round(effective_fps, 2),
         "avg_latency_ms": round(avg_latency_ms, 2),
+    }
+
+
+def build_export_report_dict(
+    result: Any,
+    config: Dict[str, Any],
+    input_mode: str,
+    source_name: str = "session_input",
+) -> Dict[str, Any]:
+    """Đóng gói kết quả phân tích thành dict thuần JSON (không kèm dữ liệu ảnh/video theo DD8)."""
+    thresholds = dict(config.get("thresholds", {}) or {})
+    tau_spoof = float(thresholds.get("tau_spoof", 0.60))
+    tau_deepfake = float(thresholds.get("tau_deepfake", 0.65))
+    uncertain_margin = float(thresholds.get("uncertain_margin", 0.08))
+
+    final_label = str(getattr(result, "final_label", LABEL_NO_FACE))
+    frame_logs = list(getattr(result, "frame_logs", []) or [])
+    elapsed_sec = float(getattr(result, "elapsed_sec", 0.0))
+    probs = normalize_aggregated_probs(getattr(result, "aggregated_probs", None))
+
+    warnings = collect_decision_warnings(
+        final_label=final_label,
+        aggregated_probs=probs,
+        frame_logs=frame_logs,
+        tau_spoof=tau_spoof,
+        tau_deepfake=tau_deepfake,
+        uncertain_margin=uncertain_margin,
+    )
+    perf = compute_performance_stats(frame_logs, elapsed_sec)
+    timeline = build_frame_timeline_rows(frame_logs)
+    bbox = getattr(result, "preview_bbox", None)
+
+    return {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "input_mode": str(input_mode),
+        "source_name": str(source_name),
+        "is_mock_preview": bool(getattr(result, "is_mock_preview", False)),
+        "final_label": final_label,
+        "final_label_vi": LABEL_DISPLAY_VI.get(final_label, final_label),
+        "confidence": round(float(getattr(result, "confidence", 0.0)), 4),
+        "reason": str(getattr(result, "reason", "")),
+        "preview_bbox": [int(v) for v in bbox] if bbox is not None else None,
+        "aggregated_probs": probs,
+        "spoof_total_prob": round(probs.get(LABEL_PRINTED, 0.0) + probs.get(LABEL_ONSCREEN, 0.0), 4),
+        "thresholds": {
+            "tau_spoof": tau_spoof,
+            "tau_deepfake": tau_deepfake,
+            "uncertain_margin": uncertain_margin,
+        },
+        "sampling": {
+            "sample_fps": int(config.get("sample_fps", 5)),
+            "max_frames": int(config.get("max_frames", 10)),
+            "enable_deepfake": bool(config.get("enable_deepfake", True)),
+        },
+        "performance": perf,
+        "warnings": warnings,
+        "frame_timeline": timeline,
     }

@@ -136,3 +136,71 @@ def test_detect_and_crop_multiple_faces_picks_largest_bbox_mocked(monkeypatch):
     assert res.face_rgb is not None
     assert res.face_rgb.shape == (224, 224, 3)
     assert res.face_rgb.dtype == np.uint8
+
+
+def test_detect_all_and_crop_returns_multiple_faces(detector):
+    """detect_all_and_crop phải trả về nhiều khuôn mặt trong cùng khung hình, mặt lớn nhất đứng đầu."""
+    bgr = cv2.imread(FIXTURE_FACE)
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    h, w, _ = rgb.shape
+
+    second_face = cv2.resize(rgb, (int(w * 0.75), int(h * 0.75)))
+    canvas = np.zeros((h, w + second_face.shape[1], 3), dtype=np.uint8)
+    canvas[:h, :w] = rgb
+    canvas[: second_face.shape[0], w:] = second_face
+
+    pkt = FramePacket(frame_id=7, timestamp_sec=0.7, image_rgb=canvas)
+    crops = detector.detect_all_and_crop(pkt, target_size=(224, 224), max_faces=4)
+
+    assert len(crops) >= 2
+    assert crops[0].bbox[0] < w  # Mặt lớn nhất bên trái đứng đầu
+    assert all(c.has_face and c.face_rgb is not None and c.face_rgb.shape == (224, 224, 3) for c in crops)
+
+
+def test_detect_all_and_crop_catches_crowd_including_small_background_faces(detector):
+    """Nhận diện đám đông phải bắt được cả người đứng gần lẫn người đứng xa kích thước nhỏ."""
+    bgr = cv2.imread(FIXTURE_FACE)
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    scene = np.full((360, 640, 3), 180, dtype=np.uint8)
+    # 5 người với kích thước ảnh giảm dần (từ tiền cảnh 160px xuống hậu cảnh 48px — mặt ~14px)
+    sizes = [160, 110, 80, 60, 48]
+    x_cursor = 12
+    for sz in sizes:
+        resized = cv2.resize(rgb, (sz, sz))
+        scene[40 : 40 + sz, x_cursor : x_cursor + sz] = resized
+        x_cursor += sz + 14
+
+    pkt = FramePacket(frame_id=9, timestamp_sec=0.9, image_rgb=scene)
+    crops = detector.detect_all_and_crop(pkt, target_size=(224, 224), max_faces=20)
+    assert len(crops) == 5
+    assert all(c.has_face and c.face_rgb is not None and c.face_rgb.shape == (224, 224, 3) for c in crops)
+
+
+def test_nms_merges_overlapping_profile_and_ear_boxes():
+    """NMS phải gộp 2 khung lệch nhẹ trên cùng 1 đầu người và geometry phải loại tai/mốc sai."""
+    from src.face_detection.detector import _is_valid_face_geometry, _nms_face_boxes
+
+    # 2 khung chồng 1 phần trên cùng đầu người quay nghiêng (mặt + tai)
+    merged = _nms_face_boxes(
+        [
+            ((100, 50, 210, 200), 0.96),
+            ((145, 45, 250, 195), 0.88),
+        ],
+        iou_threshold=0.25,
+    )
+    assert len(merged) == 1
+    assert merged[0][0] == (100, 50, 210, 200)
+
+    # Mốc mắt nằm dưới miệng (lỗi / không phải khuôn mặt) phải bị loại
+    bad_landmarks = np.array(
+        [[120, 160], [170, 160], [145, 130], [125, 90], [165, 90]],
+        dtype=np.float32,
+    )
+    assert _is_valid_face_geometry((100, 50, 200, 200), bad_landmarks) is False
+
+    # Mốc hợp lệ (mắt -> mũi -> miệng)
+    good_landmarks = np.array(
+        [[125, 95], [165, 95], [145, 125], [130, 160], [160, 160]],
+        dtype=np.float32,
+    )
+    assert _is_valid_face_geometry((100, 50, 200, 200), good_landmarks) is True

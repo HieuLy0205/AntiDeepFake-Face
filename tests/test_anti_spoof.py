@@ -158,3 +158,24 @@ def test_predict_spoof_rejects_crop_without_face():
 
     with pytest.raises(ValueError, match="detected face"):
         predict_spoof(FaceCropResult(frame_id=0, has_face=False))
+
+
+def test_level2_distinguishes_glare_grid_from_flat_matte():
+    """Level 2 FFT + glare phải trả xác suất hợp lệ và nghiêng về On-screen khi có lưới/chói sáng."""
+    from src.anti_spoof.level2 import predict_level2
+
+    # Ảnh giấy in mờ phẳng, ít tương phản
+    matte = np.full((128, 128, 3), 115, dtype=np.uint8)
+    matte[20:100, 20:100] = 135
+    p_print_m, p_screen_m = predict_level2(matte)
+    assert 0.01 <= p_print_m <= 0.99 and 0.01 <= p_screen_m <= 0.99
+    assert math.isclose(p_print_m + p_screen_m, 1.0, rel_tol=1e-6)
+
+    # Ảnh màn hình có sọc lưới tần số cao + vùng phản xạ chói sáng
+    screen = np.zeros((128, 128, 3), dtype=np.uint8)
+    screen[:, :, 2] = 180
+    screen[::3, ::3, :] = 250
+    screen[10:35, 10:35, :] = 255
+    p_print_s, p_screen_s = predict_level2(screen)
+    assert math.isclose(p_print_s + p_screen_s, 1.0, rel_tol=1e-6)
+    assert p_screen_s > p_screen_m

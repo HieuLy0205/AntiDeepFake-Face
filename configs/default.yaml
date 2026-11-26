@@ -1,9 +1,14 @@
 # Default AntiDeepFake-Face Pipeline Configuration
 seed: 42
 sample_fps: 5
-max_frames: 10
+max_frames: 30
+sampling_mode: fps             # fps | scene | uniform (UI mặc định dùng scene)
 enable_deepfake: true
-deepfake_variant: siglip2  # siglip2 | ensemble | efficientnet_b0 | vit
+deepfake_variant: siglip2      # siglip2 | ensemble | vit | efficientnet_b0
+multi_face: false              # UI mặc định bật true
+aggregation_strategy: primary  # primary | highest_risk
+scale_ratio: 1.2               # Tỉ lệ cắt sát mặt cho nhánh Deepfake (GĐ 2)
+spoof_scale_ratio: 2.7         # Tỉ lệ cắt rộng bắt buộc cho 2.7_80x80_MiniFASNetV2 (GĐ 1)
 
 thresholds:
   tau_spoof: 0.60
@@ -12,12 +17,12 @@ thresholds:
 
 models:
   face_detection:
-    backend: mtcnn
+    backend: yunet
+    onnx_path: models/face_detection_yunet_2023mar.onnx
     target_size: [224, 224]
-    margin_ratio: 0.25
   anti_spoof:
-    backend: minifasnet_v2_onnx
-    onnx_path: models/minifasnet_onnx/minifasnet_v2.onnx
+    backend: minifasnet_v2_pth
+    weights_path: models/anti_spoof/2.7_80x80_MiniFASNetV2.pth
     context_scale: 2.7
   deepfake:
     primary_model_id: king1oo1/deepfake-model

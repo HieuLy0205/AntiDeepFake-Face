@@ -115,3 +115,38 @@ def test_sliding_frame_buffer():
 
     with pytest.raises(InvalidInputError):
         SlidingFrameBuffer(max_frames=0)
+
+
+def test_load_frames_scene_and_uniform_span_full_video():
+    """Chế độ scene và uniform phải trích xuất khung hình trải dài toàn bộ thời lượng video."""
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        temp_path = f.name
+
+    # Video 60 frame @ 30 FPS (2.0 giây) với 3 cảnh khác màu rõ rệt ở 0s, 0.7s, 1.4s
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(temp_path, fourcc, 30.0, (120, 120))
+    for i in range(60):
+        if i < 20:
+            val = (20, 20, 20)
+        elif i < 40:
+            val = (220, 40, 40)
+        else:
+            val = (40, 220, 220)
+        frame = np.full((120, 120, 3), val, dtype=np.uint8)
+        out.write(frame)
+    out.release()
+
+    try:
+        scene_pkts = load_frames(temp_path, max_frames=5, sampling_mode="scene")
+        assert len(scene_pkts) == 5
+        assert scene_pkts[0].timestamp_sec == 0.0
+        assert scene_pkts[-1].timestamp_sec >= 1.3
+        assert [p.frame_id for p in scene_pkts] == [0, 1, 2, 3, 4]
+
+        uniform_pkts = load_frames(temp_path, max_frames=4, sampling_mode="uniform")
+        assert len(uniform_pkts) == 4
+        assert uniform_pkts[0].timestamp_sec == 0.0
+        assert uniform_pkts[-1].timestamp_sec >= 1.5
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)

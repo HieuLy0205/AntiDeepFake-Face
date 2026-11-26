@@ -1,6 +1,6 @@
 """Hằng số chuẩn hóa theo Quy ước Interface (Mục II.4) và Thông báo lỗi UI (Mục II.6)."""
 
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 # 5 nhãn chuẩn hóa (Quy ước mục 5.3 - tuyệt đối không thay đổi chính tả)
 LABEL_REAL = "Real"
@@ -87,4 +87,74 @@ UI_ERRORS: Dict[str, str] = {
         "Không truy cập được webcam. Hãy kiểm tra quyền truy cập hoặc dùng chế độ upload."
     ),
     "uncertain_score": "Kết quả chưa chắc chắn. Hãy thử thêm frame hoặc cải thiện ánh sáng.",
+}
+
+# Metadata trình bày trên giao diện hiện đại (chỉ phục vụ hiển thị UI, không đổi key chuẩn)
+LABEL_UI_META: Dict[str, Dict[str, str]] = {
+    LABEL_REAL: {
+        "accent": "#10b981",
+        "badge_text": "XÁC THỰC HỢP LỆ",
+        "icon": "✓",
+        "summary": "Khuôn mặt tự nhiên, không phát hiện dấu hiệu giả mạo vật lý hay tổng hợp AI.",
+    },
+    LABEL_PRINTED: {
+        "accent": "#f59e0b",
+        "badge_text": "CẢNH BÁO ẢNH IN",
+        "icon": "🖨️",
+        "summary": "Phát hiện đặc trưng bề mặt hoặc độ phẳng của ảnh in giấy trước camera.",
+    },
+    LABEL_ONSCREEN: {
+        "accent": "#f97316",
+        "badge_text": "CẢNH BÁO MÀN HÌNH",
+        "icon": "📱",
+        "summary": "Phát hiện dấu hiệu phát lại qua màn hình điện thoại, máy tính bảng hoặc monitor.",
+    },
+    LABEL_DEEPFAKE: {
+        "accent": "#ef4444",
+        "badge_text": "CẢNH BÁO DEEPFAKE",
+        "icon": "🎭",
+        "summary": "Nhánh GĐ 2 phát hiện dấu hiệu khuôn mặt bị hoán đổi hoặc tạo sinh bởi AI.",
+    },
+    LABEL_NO_FACE: {
+        "accent": "#64748b",
+        "badge_text": "KHÔNG THẤY KHUÔN MẶT",
+        "icon": "🔍",
+        "summary": "Không tìm thấy vùng khuôn mặt đủ rõ trong khung hình để đánh giá.",
+    },
+}
+
+# Bộ cấu hình nhanh cho sidebar
+CONFIG_PRESETS: Dict[str, Dict[str, Any]] = {
+    "Cân bằng (Mặc định)": {
+        "n_frames": 10,
+        "sample_fps": 5,
+        "tau_spoof": 0.60,
+        "enable_deepfake": True,
+        "tau_deepfake": 0.65,
+        "uncertain_margin": 0.08,
+    },
+    "Kiểm tra nghiêm ngặt": {
+        "n_frames": 15,
+        "sample_fps": 6,
+        "tau_spoof": 0.45,
+        "enable_deepfake": True,
+        "tau_deepfake": 0.50,
+        "uncertain_margin": 0.10,
+    },
+    "Nhanh / Nhẹ (5 frame)": {
+        "n_frames": 5,
+        "sample_fps": 3,
+        "tau_spoof": 0.60,
+        "enable_deepfake": True,
+        "tau_deepfake": 0.65,
+        "uncertain_margin": 0.08,
+    },
+    "Chỉ chống giả mạo GĐ 1": {
+        "n_frames": 10,
+        "sample_fps": 5,
+        "tau_spoof": 0.60,
+        "enable_deepfake": False,
+        "tau_deepfake": 0.65,
+        "uncertain_margin": 0.08,
+    },
 }

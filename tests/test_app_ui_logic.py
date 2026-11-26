@@ -1,6 +1,7 @@
 """Unit test cho toàn bộ logic UI, validation, visualizer và webcam của M6 (app/components)."""
 
 import io
+import json
 from pathlib import Path
 import sys
 import pytest
@@ -10,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.components.constants import (  # noqa: E402
+    ACADEMIC_LIMITATION_BANNER,
     AGGREGATED_CLASSES,
     SPOOF_CLASSES,
     UI_ERRORS,
@@ -17,6 +19,7 @@ from app.components.constants import (  # noqa: E402
 )
 from app.components.pipeline_bridge import (  # noqa: E402
     build_pipeline_config,
+    run_backend_frames_pipeline,
     run_ui_preview_simulation,
     temporary_memory_file,
 )
@@ -25,10 +28,12 @@ from app.components.validators import (  # noqa: E402
     validate_video_input,
 )
 from app.components.visualizer import (  # noqa: E402
+    build_export_report_dict,
     build_frame_timeline_rows,
     collect_decision_warnings,
     compute_performance_stats,
     draw_face_annotation,
+    draw_multi_face_annotations,
     is_near_threshold,
 )
 from app.components.webcam_handler import SlidingFrameBuffer  # noqa: E402
@@ -199,3 +204,214 @@ def test_build_config_and_ui_preview_simulation():
     assert res.is_mock_preview is True
     assert res.final_label in VALID_FINAL_LABELS
     assert res.preview_bbox is not None
+    assert res.preview_face_crop_rgb is not None
+    assert res.preview_face_crop_rgb.shape == (224, 224, 3)
+
+
+def test_build_export_report_dict_is_json_serializable():
+    """Báo cáo xuất JSON phải thuần dữ liệu (không chứa ndarray) và giữ đủ khóa chuẩn."""
+    np = pytest.importorskip("numpy")
+    cfg = build_pipeline_config(sample_fps=5, max_frames=5, enable_deepfake=True)
+    res = run_ui_preview_simulation([np.zeros((160, 160, 3), dtype=np.uint8)], cfg)
+    report = build_export_report_dict(res, cfg, input_mode="Upload ảnh", source_name="demo.jpg")
+
+    encoded = json.dumps(report, ensure_ascii=False)
+    decoded = json.loads(encoded)
+    assert decoded["final_label"] == res.final_label
+    assert decoded["input_mode"] == "Upload ảnh"
+    assert decoded["source_name"] == "demo.jpg"
+    assert len(decoded["frame_timeline"]) == 1
+    assert set(decoded["aggregated_probs"].keys()) == set(AGGREGATED_CLASSES)
+
+
+def test_run_backend_frames_pipeline_multi_frame(monkeypatch):
+    """Kiểm tra chạy pipeline đa frame từ bộ đệm webcam trình duyệt qua pipeline_bridge."""
+    np = pytest.importorskip("numpy")
+    Image = pytest.importorskip("PIL.Image")
+    import src.pipeline as pipeline
+    from src import schemas
+
+    fixture_path = PROJECT_ROOT / "tests" / "fixtures" / "sample_face.jpg"
+    if fixture_path.is_file():
+        with Image.open(fixture_path) as img:
+            frame = np.asarray(img.convert("RGB"), dtype=np.uint8)
+    else:
+        frame = np.full((240, 240, 3), 120, dtype=np.uint8)
+
+    original_loader = pipeline._load_optional_callable
+
+    def stubbed_loader(module_path, attr_name):
+        if module_path == "src.deepfake.predictor" and attr_name == "predict_deepfake":
+            return lambda crop: schemas.DeepfakeScore(frame_id=crop.frame_id, fake_prob=0.05)
+        if module_path == "src.anti_spoof.predictor" and attr_name == "predict_spoof":
+            return lambda crop: schemas.SpoofScore(
+                frame_id=crop.frame_id,
+                probs={"Real": 0.92, "Printed": 0.04, "On-screen": 0.04},
+                latency_ms=10.0,
+            )
+        return original_loader(module_path, attr_name)
+
+    monkeypatch.setattr(pipeline, "_load_optional_callable", stubbed_loader)
+    cfg = build_pipeline_config(sample_fps=5, max_frames=3, enable_deepfake=True)
+    res = run_backend_frames_pipeline([frame, frame], cfg)
+
+    assert res.error_message is None
+    assert res.is_mock_preview is False
+    assert res.final_label in VALID_FINAL_LABELS
+    assert len(res.frame_logs) == 2
+    assert [row["frame_id"] for row in res.frame_logs] == [0, 1]
+
+
+def test_streamlit_app_headless_smoke():
+    """Kiểm tra khởi tạo giao diện Streamlit và tương tác cơ bản bằng AppTest."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(PROJECT_ROOT / "app" / "app.py"), default_timeout=20)
+    at.run()
+    assert len(at.exception) == 0
+
+    rendered_markdown = "\n".join(el.value for el in at.markdown)
+    assert ACADEMIC_LIMITATION_BANNER in rendered_markdown
+
+    # Kiểm tra các nút điều khiển ở sidebar & vùng chính có mặt đầy đủ
+    assert any(b.label == "✨ Dùng ảnh mẫu thử nghiệm" for b in at.button)
+
+    # Thử nhấn nút nạp ảnh mẫu
+    demo_btn = next(b for b in at.button if b.label == "✨ Dùng ảnh mẫu thử nghiệm")
+    demo_btn.click().run()
+    assert len(at.exception) == 0
+    assert any(b.label == "🔍 Phân tích khuôn mặt" for b in at.button)
+
+
+def test_multi_face_annotations_and_scene_previews(monkeypatch):
+    """Kiểm tra vẽ HUD đa khuôn mặt và trả về frame_previews từ pipeline_bridge."""
+    np = pytest.importorskip("numpy")
+    Image = pytest.importorskip("PIL.Image")
+    import src.pipeline as pipeline
+    from src import schemas
+    from app.components.pipeline_bridge import run_backend_pipeline
+
+    img = np.zeros((240, 320, 3), dtype=np.uint8)
+    faces = [
+        {"face_index": 1, "bbox": (20, 30, 120, 160), "label": "Deepfake", "confidence": 0.91},
+        {"face_index": 2, "bbox": (180, 40, 280, 160), "label": "Real", "confidence": 0.88},
+    ]
+    annotated = draw_multi_face_annotations(img, faces)
+    assert annotated.shape == (240, 320, 3)
+    assert annotated.dtype == np.uint8
+    assert annotated.sum() > 0
+
+    fixture_path = PROJECT_ROOT / "tests" / "fixtures" / "sample_face.jpg"
+    if fixture_path.is_file():
+        with Image.open(fixture_path) as f_img:
+            rgb = np.asarray(f_img.convert("RGB"), dtype=np.uint8)
+        h, w, _ = rgb.shape
+        second = np.asarray(f_img.convert("RGB").resize((int(w * 0.7), int(h * 0.7))), dtype=np.uint8)
+        canvas = np.zeros((h, w + second.shape[1], 3), dtype=np.uint8)
+        canvas[:h, :w] = rgb
+        canvas[: second.shape[0], w:] = second
+
+        original_loader = pipeline._load_optional_callable
+
+        def stubbed_loader(module_path, attr_name):
+            if module_path == "src.deepfake.predictor" and attr_name == "predict_deepfake":
+                return lambda crop: schemas.DeepfakeScore(frame_id=crop.frame_id, fake_prob=0.10)
+            if module_path == "src.anti_spoof.predictor" and attr_name == "predict_spoof":
+                return lambda crop: schemas.SpoofScore(
+                    frame_id=crop.frame_id,
+                    probs={"Real": 0.90, "Printed": 0.05, "On-screen": 0.05},
+                    latency_ms=8.0,
+                )
+            return original_loader(module_path, attr_name)
+
+        monkeypatch.setattr(pipeline, "_load_optional_callable", stubbed_loader)
+        cfg = build_pipeline_config(
+            sample_fps=5,
+            max_frames=5,
+            enable_deepfake=True,
+            sampling_mode="scene",
+            multi_face=True,
+            include_frame_previews=True,
+        )
+        with temporary_memory_file(
+            fixture_path.read_bytes(), suffix=".jpg"
+        ) as _:
+            pass
+
+        buf = io.BytesIO()
+        Image.fromarray(canvas, mode="RGB").save(buf, format="JPEG")
+        with temporary_memory_file(buf.getvalue(), suffix=".jpg") as tmp_img:
+            res = run_backend_pipeline(tmp_img, cfg)
+        assert res.error_message is None
+        assert len(res.frame_previews) == 1
+        assert len(res.frame_previews[0]["faces"]) >= 2
+        # Đảm bảo JSON export vẫn serializable dù có frame_previews
+        report = build_export_report_dict(res, cfg, input_mode="Upload ảnh", source_name="multi.jpg")
+        assert len(json.dumps(report, ensure_ascii=False)) > 0
+
+
+def test_pipeline_dual_scale_and_highest_risk_strategy(monkeypatch):
+    """GĐ 1 phải nhận crop 2.7x rộng hơn GĐ 2 (1.2x), và highest_risk phải bắt được người phụ Deepfake."""
+    np = pytest.importorskip("numpy")
+    Image = pytest.importorskip("PIL.Image")
+    import src.pipeline as pipeline
+    from src import schemas
+    from app.components.pipeline_bridge import run_backend_pipeline
+
+    fixture_path = PROJECT_ROOT / "tests" / "fixtures" / "sample_face.jpg"
+    if not fixture_path.is_file():
+        pytest.skip("Thiếu sample_face.jpg")
+
+    with Image.open(fixture_path) as f_img:
+        rgb = np.asarray(f_img.convert("RGB"), dtype=np.uint8)
+    h, w, _ = rgb.shape
+    second = np.asarray(f_img.convert("RGB").resize((int(w * 0.65), int(h * 0.65))), dtype=np.uint8)
+    canvas = np.zeros((h, w + second.shape[1], 3), dtype=np.uint8)
+    canvas[:h, :w] = rgb
+    canvas[: second.shape[0], w:] = second
+
+    spoof_means = []
+    df_means = []
+    original_loader = pipeline._load_optional_callable
+
+    def stubbed_loader(module_path, attr_name):
+        if module_path == "src.anti_spoof.predictor" and attr_name == "predict_spoof":
+            def _spoof(crop):
+                spoof_means.append(float(crop.face_rgb.mean()))
+                return schemas.SpoofScore(
+                    frame_id=crop.frame_id,
+                    probs={"Real": 0.94, "Printed": 0.03, "On-screen": 0.03},
+                )
+            return _spoof
+        if module_path == "src.deepfake.predictor" and attr_name == "predict_deepfake":
+            def _df(crop):
+                df_means.append(float(crop.face_rgb.mean()))
+                # Người chính bên trái (bbox x1 < w) là Real (0.05); người phụ bên phải là Deepfake (0.93)
+                is_second = crop.bbox is not None and crop.bbox[0] >= w
+                return schemas.DeepfakeScore(frame_id=crop.frame_id, fake_prob=0.93 if is_second else 0.05)
+            return _df
+        return original_loader(module_path, attr_name)
+
+    monkeypatch.setattr(pipeline, "_load_optional_callable", stubbed_loader)
+
+    buf = io.BytesIO()
+    Image.fromarray(canvas, mode="RGB").save(buf, format="JPEG")
+    with temporary_memory_file(buf.getvalue(), suffix=".jpg") as tmp_img:
+        cfg_primary = build_pipeline_config(
+            multi_face=True,
+            include_frame_previews=True,
+            aggregation_strategy="primary",
+        )
+        res_primary = run_backend_pipeline(tmp_img, cfg_primary)
+        assert res_primary.final_label == "Real"
+
+        # Kiểm tra crop GĐ 1 (2.7x) khác crop GĐ 2 (1.2x) do bao phủ nền đen xung quanh
+        assert spoof_means and df_means and spoof_means[0] != pytest.approx(df_means[0], abs=0.5)
+
+        cfg_risk = build_pipeline_config(
+            multi_face=True,
+            include_frame_previews=True,
+            aggregation_strategy="highest_risk",
+        )
+        res_risk = run_backend_pipeline(tmp_img, cfg_risk)
+        assert res_risk.final_label == "Deepfake"

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
@@ -453,6 +454,7 @@ class DeepfakeDetector:
 
 
 _DEFAULT_DETECTOR: Optional[DeepfakeDetector] = None
+_VARIANT_DETECTORS: Dict[str, Any] = {}
 
 
 def get_default_detector(
@@ -482,32 +484,88 @@ def get_default_detector(
     return _DEFAULT_DETECTOR
 
 
+def get_variant_detector(variant: Optional[str] = None, device: str = "cpu") -> Any:
+    """Nạp và cache detector theo biến thể cấu hình (`siglip2`, `ensemble`, `vit`, `efficientnet_b0`)."""
+    v = (variant or "siglip2").strip().lower()
+    if v in ("", "siglip2", "default"):
+        return get_default_detector() if device == "cpu" else get_default_detector(device=device)
+
+    if v in _VARIANT_DETECTORS:
+        return _VARIANT_DETECTORS[v]
+
+    if v == "vit":
+        det: Any = DeepfakeDetector(
+            model_id="prithivMLmods/Deep-Fake-Detector-v2-Model",
+            device=device,
+        )
+    elif v == "ensemble":
+        det = EnsembleDeepfakeDetector(device=device)
+    elif v == "efficientnet_b0":
+        try:
+            det = LightweightCNNDetector(device=device)
+        except FileNotFoundError:
+            return get_default_detector(device=device)
+    else:
+        return get_default_detector(device=device)
+
+    _VARIANT_DETECTORS[v] = det
+    return det
+
+
+def get_deepfake_runtime_status(variant: str = "siglip2") -> Dict[str, Any]:
+    """Kiểm tra trạng thái adapter & cache cục bộ (chỉ đọc hệ thống tệp, không tải model)."""
+    has_siglip_adapter = any(p.is_file() for p in DEFAULT_ADAPTER_CANDIDATES)
+    has_vit_adapter = any(p.is_file() for p in DEFAULT_VIT_ADAPTER_CANDIDATES)
+    has_cnn_ckpt = any(p.is_file() for p in DEFAULT_CNN_CHECKPOINT_CANDIDATES)
+    siglip_cached = (DEFAULT_HF_CACHE_DIR / "models--king1oo1--deepfake-model").is_dir()
+    vit_cached = (DEFAULT_HF_CACHE_DIR / "models--prithivMLmods--Deep-Fake-Detector-v2-Model").is_dir()
+    return {
+        "variant": variant,
+        "has_siglip_adapter": has_siglip_adapter,
+        "has_vit_adapter": has_vit_adapter,
+        "has_cnn_checkpoint": has_cnn_ckpt,
+        "siglip_cached": siglip_cached,
+        "vit_cached": vit_cached,
+    }
+
+
 def reset_default_detector() -> None:
     """Clear the cached singleton detector (useful for tests or switching models)."""
     global _DEFAULT_DETECTOR
     _DEFAULT_DETECTOR = None
+    _VARIANT_DETECTORS.clear()
 
 
 def predict_deepfake(
     face_crop: FaceCropResult,
-    detector: Optional[DeepfakeDetector] = None,
+    detector: Optional[Any] = None,
+    variant: Optional[str] = None,
 ) -> DeepfakeScore:
     """Canonical M5 entry point invoked by M1 (`src/pipeline.py`) and `tests/test_anti_spoof_deepfake.py`."""
     if not face_crop.has_face or face_crop.face_rgb is None:
         return DeepfakeScore(frame_id=int(face_crop.frame_id), fake_prob=0.0)
-    det = detector if detector is not None else get_default_detector()
-    return det.predict(face_crop)
+    t0 = time.perf_counter()
+    det = detector if detector is not None else get_variant_detector(variant)
+    score = det.predict(face_crop)
+    score.latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    return score
 
 
 def predict_deepfake_batch(
     face_crops: Sequence[FaceCropResult],
-    detector: Optional[DeepfakeDetector] = None,
+    detector: Optional[Any] = None,
+    variant: Optional[str] = None,
 ) -> List[DeepfakeScore]:
     """Batched M5 entry point for multi-frame videos (N=5..30) on CPU."""
     if not face_crops:
         return []
-    det = detector if detector is not None else get_default_detector()
-    return det.predict_batch(face_crops)
+    t0 = time.perf_counter()
+    det = detector if detector is not None else get_variant_detector(variant)
+    scores = det.predict_batch(face_crops)
+    per_item_ms = round(((time.perf_counter() - t0) * 1000.0) / max(1, len(scores)), 2)
+    for score in scores:
+        score.latency_ms = per_item_ms
+    return scores
 
 
 class EnsembleDeepfakeDetector:
