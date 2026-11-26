@@ -2,7 +2,7 @@
 
 Đầu vào là ảnh crop RGB uint8 (H x W x 3) từ M3.
 Đầu ra là dict có ba xác suất chữ thường, tổng bằng 1.
-Mặc định đang dùng mock để thử tích hợp; chưa phải bộ nhận diện thật.
+Level 1 dùng MiniFASNet; Level 2 tạm dùng mock cho tới khi nhận code 4.2.
 """
 
 from collections.abc import Callable
@@ -15,9 +15,11 @@ import numpy as np
 Level1Predictor = Callable[[np.ndarray], tuple[float, float]]
 Level2Predictor = Callable[[np.ndarray], tuple[float, float]]
 
-def _mock_level1(crop_rgb: np.ndarray) -> tuple[float, float]:
-    """Mock tạm để kiểm tra luồng; không phân tích nội dung ảnh."""
-    return 0.25, 0.75
+def _predict_level1(crop_rgb: np.ndarray) -> tuple[float, float]:
+    """Gọi MiniFASNet thật; model và weights được nạp/cache tại level1.py."""
+    from .level1 import predict_level1
+
+    return predict_level1(crop_rgb)
 
 def _mock_level2(crop_rgb: np.ndarray) -> tuple[float, float]:
     """Mock tạm để kiểm tra luồng; sẽ thay bằng heuristic OpenCV của 4.2."""
@@ -53,7 +55,8 @@ class AntiSpoofModel:
         level2_predictor: Level2Predictor | None = None,
     ) -> None:
         """Thiết lập ngưỡng và hàm dự đoán; cho phép tiêm mock khi viết test.
-        Hai hàm dự đoán thật sẽ được truyền vào sau khi thành viên 4.1/4.2 bàn giao.
+        Có thể truyền predictor khác khi test; mặc định dùng MiniFASNet cho Level 1
+        và mock cho Level 2 tới khi phần heuristic của 4.2 được bàn giao.
         """
         threshold = float(spoof_threshold)
         if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
@@ -61,7 +64,7 @@ class AntiSpoofModel:
 
         self.spoof_threshold = threshold
         self._level1_predictor = (
-            level1_predictor if level1_predictor is not None else _mock_level1
+            level1_predictor if level1_predictor is not None else _predict_level1
         )
         self._level2_predictor = (
             level2_predictor if level2_predictor is not None else _mock_level2

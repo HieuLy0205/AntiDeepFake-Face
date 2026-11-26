@@ -1,4 +1,7 @@
 import math
+import sys
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -42,6 +45,35 @@ def test_predict_skips_level2_below_spoof_threshold(sample_face_crop_224):
     assert probabilities == pytest.approx(
         {"real": 0.8, "printed": 0.1, "onscreen": 0.1}
     )
+
+
+def test_default_level1_uses_predict_level1_from_module(
+    sample_face_crop_224, monkeypatch
+):
+    """Mặc định phải gọi predictor Level 1 thật, không dùng kết quả mock cũ."""
+    received_crops = []
+
+    def fake_predict_level1(crop):
+        received_crops.append(crop)
+        return 0.9, 0.1
+
+    monkeypatch.setitem(
+        sys.modules,
+        "src.anti_spoof.level1",
+        SimpleNamespace(predict_level1=fake_predict_level1),
+    )
+    model = AntiSpoofModel(
+        level2_predictor=lambda crop: pytest.fail("Level 2 should not be called")
+    )
+
+    probabilities = model.predict(sample_face_crop_224)
+
+    assert len(received_crops) == 1
+    assert received_crops[0] is sample_face_crop_224
+    assert probabilities == pytest.approx(
+        {"real": 0.9, "printed": 0.05, "onscreen": 0.05}
+    )
+
 
 @pytest.mark.parametrize(
     "crop",
