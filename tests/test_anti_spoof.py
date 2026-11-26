@@ -75,6 +75,33 @@ def test_default_level1_uses_predict_level1_from_module(
     )
 
 
+def test_default_level2_uses_predict_level2_from_module(
+    sample_face_crop_224, monkeypatch
+):
+    """Khi Level 1 phát hiện spoof, mặc định gọi heuristic Level 2."""
+    received_crops = []
+
+    def fake_predict_level2(crop):
+        received_crops.append(crop)
+        return 0.85, 0.15
+
+    monkeypatch.setitem(
+        sys.modules,
+        "src.anti_spoof.level2",
+        SimpleNamespace(predict_level2=fake_predict_level2),
+    )
+    model = AntiSpoofModel(level1_predictor=lambda crop: (0.05, 0.95))
+
+    probabilities = model.predict(sample_face_crop_224)
+
+    assert len(received_crops) == 1
+    assert received_crops[0] is sample_face_crop_224
+    assert probabilities == pytest.approx(
+        {"real": 0.05, "printed": 0.8075, "onscreen": 0.1425}
+    )
+    assert math.isclose(sum(probabilities.values()), 1.0)
+
+
 @pytest.mark.parametrize(
     "crop",
     [

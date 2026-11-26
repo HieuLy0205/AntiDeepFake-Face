@@ -2,7 +2,7 @@
 
 Đầu vào là ảnh crop RGB uint8 (H x W x 3) từ M3.
 Đầu ra là dict có ba xác suất chữ thường, tổng bằng 1.
-Level 1 dùng MiniFASNet; Level 2 tạm dùng mock cho tới khi nhận code 4.2.
+Level 1 dùng MiniFASNet; Level 2 dùng heuristic OpenCV.
 """
 
 from collections.abc import Callable
@@ -21,9 +21,12 @@ def _predict_level1(crop_rgb: np.ndarray) -> tuple[float, float]:
 
     return predict_level1(crop_rgb)
 
-def _mock_level2(crop_rgb: np.ndarray) -> tuple[float, float]:
-    """Mock tạm để kiểm tra luồng; sẽ thay bằng heuristic OpenCV của 4.2."""
-    return 0.40, 0.60
+
+def _predict_level2(crop_rgb: np.ndarray) -> tuple[float, float]:
+    """Gọi heuristic OpenCV để phân biệt ảnh in với ảnh trên màn hình."""
+    from .level2 import predict_level2
+
+    return predict_level2(crop_rgb)
 
 def _normalize_pair(values: tuple[float, float], name: str) -> tuple[float, float]:
     """Kiểm tra một cặp điểm và chuẩn hóa để tổng của cặp bằng 1."""
@@ -56,7 +59,7 @@ class AntiSpoofModel:
     ) -> None:
         """Thiết lập ngưỡng và hàm dự đoán; cho phép tiêm mock khi viết test.
         Có thể truyền predictor khác khi test; mặc định dùng MiniFASNet cho Level 1
-        và mock cho Level 2 tới khi phần heuristic của 4.2 được bàn giao.
+        và heuristic OpenCV cho Level 2.
         """
         threshold = float(spoof_threshold)
         if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
@@ -67,7 +70,7 @@ class AntiSpoofModel:
             level1_predictor if level1_predictor is not None else _predict_level1
         )
         self._level2_predictor = (
-            level2_predictor if level2_predictor is not None else _mock_level2
+            level2_predictor if level2_predictor is not None else _predict_level2
         )
     def predict(self, crop: np.ndarray | None) -> dict[str, float]:
         """Nhận crop RGB từ M3, trả xác suất real/printed/onscreen.
