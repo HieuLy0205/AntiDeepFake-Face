@@ -1,0 +1,7 @@
+sample_fps: 5
+max_frames: 30
+enable_deepfake: true
+scale_ratio: 1.2
+thresholds:
+  tau_spoof: 0.60
+  tau_deepfake: 0.60
